@@ -1,0 +1,112 @@
+% a function to calculate the element forcing vector of a linear element
+% in a two dimensional heat conduction problem
+
+function Fe = Felement(elei,node1,node2,node3,thickness,heatgen_cond,G,U,V,i)
+    % l = length of the element; csa = cross sectional area of the element
+    % KThermal = thermal conductivity; p = perimeter of the element; h =
+    % coefficient of convection; direct = specifies the types of heat losses in
+    % the system; typeofh = type of convection(lateral or endnode); n = number
+    % of elements; endnode = node number of the last node
+    %%
+    
+    Fe = zeros(3,1); % initialize the Fe vector to a 3x1 vector of zeros
+    
+    % this calculates the area of the element
+    Area = 0.5*(det([1 node1(1) node1(2); 1 node2(1) node2(2); 1 node3(1) node3(2)]));
+    
+    % if the element has internal heat generation, the routine calculates 
+    % contribution of internal heat generation to the forcing vector.
+    if heatgen_cond==1
+        Feg = G*Area*thickness/3*[1; 1; 1];
+        Fe = Fe+Feg;
+    end
+   
+    n_ij = [1; 1; 0]; % value of N if node i-j are exposed to convection
+    n_jk = [0; 1; 1]; % value of N if node j-k are exposed to convection
+    n_ki = [1; 0; 1]; % value of N if node k-i are exposed to convection
+    
+    % if two or more of the nodes are exposed to convection, it the routine below
+    % calculate the contribution of convection to the forcing vector.
+    if (node1(3)+node2(3)+node3(3))>=2
+        Fec = calcF_convec(node1,node2,thickness,n_ij);
+        Fe = Fe+Fec;
+        Fec = calcF_convec(node2,node3,thickness,n_jk);
+        Fe = Fe+Fec;
+        Fec = calcF_convec(node3,node1,thickness,n_ki);
+        Fe = Fe+Fec;
+    end
+    
+    % if two or more nodes are exposed to heat flux, the routine calculates
+    % the contribution of heat flux to the forcing vector
+     if (node1(6)+node2(6)+node3(6))>=2
+        Feq = calcF_heatflux(node1,node2,thickness,n_ij);
+        Fe = Fe+Feq;
+        Feq = calcF_heatflux(node2,node3,thickness,n_jk);
+        Fe = Fe+Feq;
+        Feq = calcF_heatflux(node3,node1,thickness,n_ki);
+        Fe = Fe+Feq;
+    end
+end
+
+function len = sidelength(a,b)
+    len = ((b(1)-a(1))^2 + (b(2)-a(2))^2)^(1/2);
+end
+
+% a function to determine the correct value of convection coefficient and
+% ambient temperature to be used in the calculation.
+function [h Ta] = det_h_Ta(a,b)
+    if (a(8)==1)||(a(8)==U+1)||(a(8)==(U+1)*(V+1))||(a(8)==((U+1)*V)+1)
+        h = b(4);
+        Ta = b(5);
+    else
+        h = a(4);
+        Ta = a(5);
+    end
+end
+
+% if this side of the element (defined by nodea and nodeb) is horizontal or
+% vertical (that is it is a boundary side) and the 2 nodes are exposed to
+% convection, then the routine calculates the contribution due to convection
+% on the side to the element forcing vector.
+function Fec = calcF_convec(nodea,nodeb,thickness,shpfct)
+        % if the side is horizontal the y-coord of the 2 nodes are equal
+        % if the side is vertical the x-coord of the 2 nodes are equal
+        if ((nodea(1)==nodeb(1))||(nodea(2)==nodeb(2)))&&((nodea(3)+nodeb(3))==2)
+            if nodea(4)==nodeb(4);
+                h = nodea(4);
+                Ta = nodea(5);
+            else
+                [h Ta] = det_h_Ta(nodea, nodeb);
+            end
+            Fec = h*thickness*Ta*sidelength(nodea,nodeb)/2*shpfct;
+        else
+            Fec = zeros(3,1); % return a 3x1 array of zeros if condition is not true
+        end
+end
+
+% a function to determine the correct value of heat flux to be used in
+% calculation
+function q = det_q(a,b)
+    if (a(8)==1)||(a(8)==U+1)||(a(8)==(U+1)*(V+1))||(a(8)==((U+1)*V)+1)
+        q = b(7);
+    else
+        q = a(7);
+    end
+end
+
+% if this side of the element (defined by nodea and nodeb) is horizontal or
+% vertical (that is it is a boundary side) and the 2 nodes are exposed to
+% heat flux, then the routine calculates the contribution due to heat flux 
+% on the side to the element forcing vector.
+function Feq = calcF_heatflux(nodea,nodeb,thickness,shpfct)
+        if ((nodea(1)==nodeb(1))||(nodea(2)==nodeb(2)))&&((nodea(6)+nodeb(6))==2)
+            if nodea(7)==nodeb(7);
+                q = nodea(7);
+            else
+                q = det_q(nodea, nodeb);
+            end
+            Feq = -q*thickness*sidelength(nodea,nodeb)/2*shpfct;
+        else
+            Feq = zeros(3,1); % return a 3x1 array of zeros if condition is not true
+        end
+end

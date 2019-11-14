@@ -1,0 +1,67 @@
+% a function to calculate the element stiffness matrix of a linear element
+% in a two dimensional heat conduction problem
+
+function Ke = Kelement(elei,node1,node2,node3,kx,ky,thickness,U,V,i)
+    % l = length of the element; csa = cross sectional area of the element
+    % KThermal = thermal conductivity; p = perimeter of the element; h =
+    % coefficient of convection; direct = specifies the types of heat losses in
+    % the system; typeofh = type of convection(lateral or endnode); n = number
+    % of elements; endnode = node number of the last node
+    %%
+    
+    % these values are used to determine the matrix [B]
+    bi = node2(2) - node3(2);
+    bj = node3(2) - node1(2);
+    bk = node1(2) - node2(2);
+    ci = node3(1) - node2(1);
+    cj = node1(1) - node3(1);
+    ck = node2(1) - node1(1);
+    
+    % this calculates 2*Area of the element
+    twoA = det([1 node1(1) node1(2); 1 node2(1) node2(2); 1 node3(1) node3(2)]);
+    
+    B = (1/twoA)*[bi bj bk; ci cj ck];
+    D = [kx 0; 0 ky];
+    Ke = (B')*(D)*(B)*(twoA/2)*thickness; %element stiffness matrix due to conduction
+    
+    n_tran_n_ij = [2 1 0; 1 2 0; 0 0 0]; % N transpose multiplied by N for node side i-j
+    n_tran_n_jk = [0 0 0; 0 2 1; 0 1 2]; % N transpose multiplied by N for node side j-k
+    n_tran_n_ki = [2 0 1; 0 0 0; 1 0 2]; % N transpose multiplied by N for node side k-i
+    if (node1(3)+node2(3)+node3(3))>=2
+        K = calcK_convec(node1,node2,thickness,n_tran_n_ij);
+        Ke = Ke+K;
+        K = calcK_convec(node2,node3,thickness,n_tran_n_jk);
+        Ke = Ke+K;
+        K = calcK_convec(node3,node1,thickness,n_tran_n_ki);
+        Ke = Ke+K;
+    end
+end
+
+function len = sidelength(a,b) % function that calculates the length of a side
+    len = ((b(1)-a(1))^2 + (b(2)-a(2))^2)^(1/2);
+end
+
+% function that determines the correct value of h to use for a corner node.
+function det = determineh(a,b)
+    if (a(8)==1)||(a(8)==U+1)||(a(8)==(U+1)*(V+1))||(a(8)==((U+1)*V)+1)
+        h = b(8);
+    else
+        h = a(8);
+    end
+    det = h;
+end
+   
+% function that calculates the correct convective stiffness matrix for the
+% element depending on which of the nodes are exposed to convection.
+function K = calcK_convec(nodea,nodeb,thickness,NTN)
+        if ((nodea(1)==nodeb(1))||(nodea(2)==nodeb(2)))&&((nodea(3)+nodeb(3))==2)
+            if nodea(4)==nodeb(4);
+                h = nodea(4);
+            else
+                h = determineh(nodea, nodeb);
+            end
+            K = h*thickness*sidelength(nodea,nodeb)/6*NTN;
+        else
+            K = zeros(3,3);
+        end
+end
